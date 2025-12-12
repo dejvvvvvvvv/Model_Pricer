@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiri:Moto Frame API Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      background: #f0f0f0;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .info { background: #d1ecf1; color: #0c5460; }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    #console {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .log { margin: 2px 0; }
+    .log-info { color: #4fc3f7; }
+    .log-success { color: #81c784; }
+    .log-error { color: #e57373; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Kiri:Moto Frame API Test</h1>
+  
+  <div class="status info">
+    <strong>Status:</strong> <span id="status">Ready to test</span>
+  </div>
+
+  <div>
+    <button onclick="testInitialize()">1. Initialize Kiri:Moto</button>
+    <button onclick="testLoadModel()">2. Load Test Model</button>
+    <button onclick="testSlice()">3. Slice Model</button>
+    <button onclick="clearConsole()">Clear Console</button>
+  </div>
+
+  <input type="file" id="fileInput" accept=".stl" style="margin: 10px 0; display: block;">
+
+  <div id="results"></div>
+
+  <div id="console"></div>
+
+  <script type="module">
+    let kiri = null;
+    let modelLoaded = false;
+
+    // Console logging
+    function log(message, type = 'info') {
+      const consoleDiv = document.getElementById('console');
+      const logDiv = document.createElement('div');
+      logDiv.className = `log log-${type}`;
+      logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      consoleDiv.appendChild(logDiv);
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+      console.log(message);
+    }
+
+    function setStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      const statusDiv = statusEl.parentElement;
+      statusEl.textContent = message;
+      statusDiv.className = `status ${type}`;
+    }
+
+    function showResults(data) {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = `
+        <div class="status success">
+          <h3>✅ Slice Results:</h3>
+          <ul>
+            <li><strong>Time:</strong> ${data.time} minutes</li>
+            <li><strong>Material:</strong> ${data.material} grams</li>
+            <li><strong>Layers:</strong> ${data.layers}</li>
+            ${data.volume ? `<li><strong>Volume:</strong> ${data.volume} mm³</li>` : ''}
+          </ul>
+        </div>
+      `;
+    }
+
+    window.clearConsole = function() {
+      document.getElementById('console').innerHTML = '';
+    };
+
+    window.testInitialize = async function() {
+      try {
+        setStatus('Initializing Kiri:Moto...', 'info');
+        log('Starting Kiri:Moto initialization...', 'info');
+
+        // Dynamically import the wrapper
+        const module = await import('./src/lib/kiri/kiriFrameWrapper.ts');
+        const { KiriFrameWrapper } = module;
+
+        kiri = new KiriFrameWrapper();
+        await kiri.initialize();
+
+        log('✅ Kiri:Moto initialized successfully!', 'success');
+        setStatus('Kiri:Moto initialized - Ready to load model', 'success');
+      } catch (error) {
+        log(`❌ Initialization failed: ${error.message}`, 'error');
+        setStatus(`Initialization failed: ${error.message}`, 'error');
+        console.error(error);
+      }
+    };
+
+    window.testLoadModel = async function() {
+      if (!kiri) {
+        alert('Please initialize Kiri:Moto first!');
+        return;
+      }
+
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert('Please select an STL file first!');
+        return;
+      }
+
+      try {
+        setStatus('Loading model...', 'info');
+        log(`Loading model: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`, 'info');
+
+        await kiri.loadModel(file);
+        modelLoaded = true;
+
+        log('✅ Model loaded successfully!', 'success');
+        setStatus('Model loaded - Ready to slice', 'success');
+      } catch (error) {
+        log(`❌ Model loading failed: ${error.message}`, 'error');
+        setStatus(`Model loading failed: ${error.message}`, 'error');
+        console.error(error);
+      }
+    };
+
+    window.testSlice = async function() {
+      if (!kiri) {
+        alert('Please initialize Kiri:Moto first!');
+        return;
+      }
+
+      if (!modelLoaded) {
+        alert('Please load a model first!');
+        return;
+      }
+
+      try {
+        setStatus('Slicing model...', 'info');
+        log('Starting slice with config: { nozzle: 0.4mm, layer: 0.2mm, infill: 20%, walls: 3 }', 'info');
+
+        const config = {
+          nozzleDiameter: 0.4,
+          layerHeight: 0.2,
+          infill: 20,
+          walls: 3,
+          supports: false
+        };
+
+        const result = await kiri.slice(config);
+
+        log(`✅ Slice complete! Time: ${result.time}min, Material: ${result.material}g, Layers: ${result.layers}`, 'success');
+        setStatus('Slice complete!', 'success');
+        showResults(result);
+      } catch (error) {
+        log(`❌ Slicing failed: ${error.message}`, 'error');
+        setStatus(`Slicing failed: ${error.message}`, 'error');
+        console.error(error);
+      }
+    };
+
+    // Auto-log browser console messages
+    const originalLog = console.log;
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      if (args[0] && typeof args[0] === 'string' && args[0].includes('[KiriFrame]')) {
+        log(args.join(' '), 'info');
+      }
+    };
+
+    log('Test page loaded. Click "1. Initialize Kiri:Moto" to start.', 'info');
+  </script>
+</body>
+</html>
